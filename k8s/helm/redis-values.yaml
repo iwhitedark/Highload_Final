@@ -1,0 +1,38 @@
+# Redis Helm values for bitnami/redis
+# Install: helm install redis bitnami/redis -n highload -f redis-values.yaml
+
+global:
+  storageClass: "standard"
+
+architecture: standalone
+
+auth:
+  enabled: true
+  password: "highload-redis-password"
+
+master:
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  # Redis configuration for high performance
+  configuration: |
+    maxmemory 200mb
+    maxmemory-policy allkeys-lru
+    appendonly no
+    save ""
+
+replica:
+  replicaCount: 0
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: highload

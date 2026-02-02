@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: highload-service
+  namespace: highload
+  labels:
+    app: highload-service
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/prometheus"
+spec:
+  type: ClusterIP
+  selector:
+    app: highload-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 8080
+    protocol: TCP

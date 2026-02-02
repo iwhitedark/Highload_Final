@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: highload-config
+  namespace: highload
+  labels:
+    app: highload-service
+data:
+  SERVER_ADDR: ":8080"
+  REDIS_ADDR: "redis-master.highload.svc.cluster.local:6379"
+  REDIS_DB: "0"
+  WORKER_COUNT: "4"
+  BUFFER_SIZE: "10000"

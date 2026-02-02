@@ -1,0 +1,119 @@
+# Prometheus Stack Helm values
+# Install: helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring -f prometheus-values.yaml
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 7d
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    additionalScrapeConfigs:
+      - job_name: 'highload-service'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - highload
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+grafana:
+  enabled: true
+  adminPassword: "admin"
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'job']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'default-receiver'
+      routes:
+        - match:
+            alertname: HighAnomalyRate
+          receiver: 'anomaly-receiver'
+    receivers:
+      - name: 'default-receiver'
+      - name: 'anomaly-receiver'
+
+# Custom PrometheusRule for anomaly alerts
+additionalPrometheusRulesMap:
+  highload-rules:
+    groups:
+      - name: highload-alerts
+        rules:
+          - alert: HighAnomalyRate
+            expr: increase(highload_anomalies_detected_total[1m]) > 5
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High anomaly rate detected"
+              description: "More than 5 anomalies detected in the last minute"
+          - alert: HighLatency
+            expr: histogram_quantile(0.99, sum(rate(highload_request_duration_seconds_bucket[5m])) by (le)) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High request latency"
+              description: "99th percentile latency is above 100ms"
+          - alert: ServiceDown
+            expr: up{job="highload-service"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Highload service is down"
+              description: "The highload service has been down for more than 1 minute"
